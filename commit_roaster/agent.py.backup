@@ -1,0 +1,106 @@
+"""
+Commit Roaster: Main Workflow Agent
+
+Orchestrates:
+  1. Analyzer → fetch and parse commits
+  2. Grader → score each commit
+  3. Feedback Generator → create funny roasts
+"""
+
+import os
+from google.adk.agents import Agent
+from google.adk.apps import App
+from google.adk.models import Gemini
+from google.genai import types
+
+from commit_roaster.analyzer import fetch_commits, analyze_commit_message
+from commit_roaster.grader import score_commit
+from commit_roaster.feedback_generator import generate_feedback
+from commit_roaster.config import GEMINI_MODEL, GEMINI_API_KEY
+
+
+def create_roast_report(repo_url: str, max_commits: int = 10) -> str:
+    """
+    Main workflow: fetch commits → analyze → grade → generate feedback.
+    
+    Args:
+        repo_url: GitHub repository URL (e.g., https://github.com/user/repo)
+        max_commits: Number of recent commits to roast
+    
+    Returns:
+        Full roasting report as formatted string
+    """
+    # Phase 1: Analyzer
+    print(f"Fetching commits from {repo_url}...")
+    commits = fetch_commits(repo_url, max_commits)
+    
+    if isinstance(commits, dict) and "error" in commits:
+        return f"Error: {commits['error']}"
+    
+    if not commits:
+        return "No commits found. Make sure the repo is public or your token is valid."
+    
+    # Phase 2 & 3: Grade and generate feedback for each commit
+    report_lines = [
+        "╔════════════════════════════════════════════════════════════════╗",
+        "║                  COMMIT ROASTER REPORT                         ║",
+        "╚════════════════════════════════════════════════════════════════╝",
+        "",
+    ]
+    
+    for idx, commit in enumerate(commits, 1):
+        message = commit["message"]
+        
+        # Analyze
+        analysis = analyze_commit_message(message)
+        
+        # Grade
+        scores = score_commit(analysis, message)
+        
+        # Feedback
+        feedback = generate_feedback(scores, message)
+        
+        report_lines.append(f"[Commit {idx}/{len(commits)}]")
+        report_lines.append(feedback)
+        report_lines.append("")
+    
+    # Summary
+    summary = f"""
+╔════════════════════════════════════════════════════════════════╗
+║  SUMMARY                                                        ║
+║  Commits roasted: {len(commits)}                              
+║  Overall vibes: Your code is interesting.                     ║
+║  Recommendation: Keep shipping.                                ║
+╚════════════════════════════════════════════════════════════════╝
+"""
+    report_lines.append(summary)
+    
+    # Encode to ASCII, dropping any non‑ASCII characters (box‑drawing, emojis, etc.)
+    report = "\n".join(report_lines)
+    safe_report = report.encode('ascii', errors='ignore').decode('ascii')
+    return safe_report
+
+
+# ADK Agent and App configuration
+# This allows the agent to run in the interactive playground and handle chat queries
+
+root_agent = Agent(
+    name="root_agent",
+    model=Gemini(
+        model=GEMINI_MODEL,
+        api_key=GEMINI_API_KEY if GEMINI_API_KEY else None,
+        retry_options=types.HttpRetryOptions(attempts=3),
+    ),
+    instruction=(
+        "You are Commit Roaster, a hilarious and helpful AI coordinator. "
+        "Your task is to roast GitHub commit messages for repositories provided by the user. "
+        "When the user gives you a GitHub URL, call the `create_roast_report` tool with the URL "
+        "and show them the full, beautiful report verbatim. Do not summarize or alter the report's text."
+    ),
+    tools=[create_roast_report],
+)
+
+app = App(
+    root_agent=root_agent,
+    name="app",
+)

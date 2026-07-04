@@ -1,0 +1,15 @@
+name: "commit-roaster"
+acli_version: "0.5.1"
+agent_directory: "commit_roaster"
+region: "us-east1"
+base_template: "adk"
+generated_at: "2026-06-25T13:20:11.921864+00:00"
+language: "python"
+create_params:
+  deployment_target: "none"
+  session_type: "in_memory"
+  cicd_runner: "skip"
+  include_data_ingestion: false
+  
+  datastore: "none"
+  agent_guidance_filename: "AGENTS.md"
